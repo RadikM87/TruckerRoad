@@ -2,28 +2,41 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Trucker Quest: Парковка</title>
-    <!-- Подключение Telegram Web App SDK -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trucker Quest</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* Стили для игры */
+        /* Общие стили */
         body {
             font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background: #f0f0f0;
-            margin: 0;
             padding: 20px;
+            background: #f0f0f0;
         }
 
-        #game-area {
-            width: 400px;
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .animation-area {
             height: 200px;
-            background: #fff;
-            border: 3px solid #333;
+            border: 2px solid #333;
             position: relative;
             margin: 20px 0;
+            overflow: hidden;
         }
 
         #truck {
@@ -31,100 +44,101 @@
             height: 40px;
             background: #8B4513;
             position: absolute;
-            left: 0;
-            top: 80px;
-            transition: left 0.3s ease;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-        }
-
-        #parking-spot {
-            width: 100px;
-            height: 40px;
-            background: #228B22;
-            position: absolute;
-            right: 20px;
-            top: 80px;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-        }
-
-        .controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        button {
-            padding: 12px 24px;
-            font-size: 16px;
-            cursor: pointer;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-        }
-
-        button:hover {
-            background: #45a049;
+            left: -100px;
+            transition: left 0.5s linear;
         }
     </style>
 </head>
 <body>
-    <h2>Паркуй грузовик!</h2>
-    <div id="game-area">
-        <div id="truck">🚚</div>
-        <div id="parking-spot">🅿️</div>
-    </div>
-    <div class="controls">
-        <button onclick="moveLeft()">← Влево</button>
-        <button onclick="moveRight()">→ Вправо</button>
-        <button onclick="tryPark()">Парковаться</button>
+    <div class="container">
+        <h1>🚚 Trucker Quest</h1>
+        
+        <!-- Блок статуса -->
+        <div id="status">
+            <p>Баланс: <span id="balance">0</span>₽</p>
+            <p>Уровень: <span id="level">1</span></p>
+        </div>
+
+        <!-- Кнопки управления -->
+        <button class="btn" onclick="startRoute()">🏁 Начать рейс</button>
+        <button class="btn" onclick="showGarage()">🔧 Гараж</button>
+        <button class="btn" onclick="showRating()">🏆 Рейтинг</button>
+
+        <!-- Анимация рейса -->
+        <div class="animation-area">
+            <div id="truck">🚚</div>
+        </div>
     </div>
 
     <script>
-        let truckPosition = 0; // Начальная позиция грузовика
-        const truckSpeed = 20; // Пикселей за одно нажатие
-        const parkingZoneStart = 260; // Начало зоны парковки (в пикселях)
+        // Инициализация Web App
+        Telegram.WebApp.ready();
+        let userData = {};
 
-        // Движение влево
-        function moveLeft() {
-            if (truckPosition > 0) {
-                truckPosition -= truckSpeed;
-                updateTruckPosition();
+        // Загрузка данных пользователя
+        async function loadUserData() {
+            try {
+                const response = await fetch('ВАШ_БЭКЭНД/get-user-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-Data': Telegram.WebApp.initData
+                    }
+                });
+                userData = await response.json();
+                updateUI();
+            } catch (error) {
+                console.error('Ошибка:', error);
             }
         }
 
-        // Движение вправо
-        function moveRight() {
-            if (truckPosition < (400 - 80)) { // 400px (ширина области) - 80px (ширина грузовика)
-                truckPosition += truckSpeed;
-                updateTruckPosition();
+        // Обновление интерфейса
+        function updateUI() {
+            document.getElementById('balance').textContent = userData.balance;
+            document.getElementById('level').textContent = userData.level;
+        }
+
+        // Начать рейс
+        async function startRoute() {
+            const truck = document.getElementById('truck');
+            truck.style.left = "-100px";
+            
+            // Анимация движения
+            let position = -100;
+            const animation = setInterval(() => {
+                position += 5;
+                truck.style.left = position + "px";
+                
+                if(position > 600) {
+                    clearInterval(animation);
+                    completeRoute();
+                }
+            }, 50);
+        }
+
+        // Завершение рейса
+        async function completeRoute() {
+            try {
+                const response = await fetch('ВАШ_БЭКЭНД/complete-route', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-Data': Telegram.WebApp.initData
+                    }
+                });
+                
+                if(response.ok) {
+                    userData = await response.json();
+                    updateUI();
+                    Telegram.WebApp.showAlert("Рейс завершен! +500₽");
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
             }
         }
 
-        // Обновление позиции грузовика
-        function updateTruckPosition() {
-            document.getElementById("truck").style.left = truckPosition + "px";
-        }
-
-        // Проверка парковки
-        function tryPark() {
-            const success = (truckPosition >= parkingZoneStart && truckPosition <= (parkingZoneStart + 20));
-
-            // Отправка результата в Telegram-бота
-            Telegram.WebApp.sendData(JSON.stringify({
-                action: "parking",
-                success: success,
-                score: success ? 100 : 0
-            }));
-        }
+        // Инициализация
+        loadUserData();
     </script>
 </body>
 </html>
