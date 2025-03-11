@@ -6,86 +6,169 @@
     <title>Trucker Quest</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* Общие стили */
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+        }
+
         body {
             font-family: Arial, sans-serif;
+            margin: 0;
             padding: 20px;
-            background: #f0f0f0;
+            background: #f5f6fa;
         }
 
         .container {
-            max-width: 600px;
+            max-width: 800px;
             margin: 0 auto;
+        }
+
+        .section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
         .btn {
             display: block;
             width: 100%;
-            padding: 15px;
+            padding: 12px;
             margin: 10px 0;
-            background: #4CAF50;
+            background: var(--secondary);
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 16px;
+            transition: opacity 0.3s;
         }
 
-        .animation-area {
-            height: 200px;
-            border: 2px solid #333;
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .truck-animation {
+            height: 100px;
+            background: #ecf0f1;
+            border-radius: 10px;
             position: relative;
-            margin: 20px 0;
             overflow: hidden;
         }
 
-        #truck {
+        .truck {
             width: 80px;
             height: 40px;
-            background: #8B4513;
+            background: var(--primary);
             position: absolute;
             left: -100px;
             transition: left 0.5s linear;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .garage-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .truck-card {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .rating-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .rating-table td, .rating-table th {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚚 Trucker Quest</h1>
-        
-        <!-- Блок статуса -->
-        <div id="status">
-            <p>Баланс: <span id="balance">0</span>₽</p>
-            <p>Уровень: <span id="level">1</span></p>
+        <!-- Шапка -->
+        <div class="section">
+            <h1>🚚 Trucker Quest</h1>
+            <div class="stats">
+                <p>Баланс: <span id="balance">0</span>₽</p>
+                <p>Уровень: <span id="level">1</span></p>
+            </div>
         </div>
 
-        <!-- Кнопки управления -->
-        <button class="btn" onclick="startRoute()">🏁 Начать рейс</button>
-        <button class="btn" onclick="showGarage()">🔧 Гараж</button>
-        <button class="btn" onclick="showRating()">🏆 Рейтинг</button>
+        <!-- Навигация -->
+        <div class="section">
+            <button class="btn" onclick="showScreen('main')">Главная</button>
+            <button class="btn" onclick="showScreen('garage')">Гараж</button>
+            <button class="btn" onclick="showScreen('rating')">Рейтинг</button>
+        </div>
 
-        <!-- Анимация рейса -->
-        <div class="animation-area">
-            <div id="truck">🚚</div>
+        <!-- Основной экран -->
+        <div id="mainScreen" class="screen">
+            <div class="section">
+                <h2>Выберите маршрут</h2>
+                <button class="btn" onclick="startRoute('Москва-Казань')">Москва-Казань (800км)</button>
+                <button class="btn" onclick="startRoute('СПб-Мурманск')">СПб-Мурманск (1200км)</button>
+                
+                <div class="truck-animation">
+                    <div class="truck" id="truck">🚚</div>
+                </div>
+                
+                <div id="routeProgress"></div>
+            </div>
+        </div>
+
+        <!-- Гараж -->
+        <div id="garageScreen" class="screen" style="display: none;">
+            <div class="section">
+                <h2>Ваши грузовики</h2>
+                <div class="garage-grid" id="garageList"></div>
+            </div>
+        </div>
+
+        <!-- Рейтинг -->
+        <div id="ratingScreen" class="screen" style="display: none;">
+            <div class="section">
+                <h2>Топ-10 игроков</h2>
+                <table class="rating-table" id="ratingTable">
+                    <tr>
+                        <th>Игрок</th>
+                        <th>Баланс</th>
+                        <th>Рейсы</th>
+                    </tr>
+                </table>
+            </div>
         </div>
     </div>
 
     <script>
-        // Инициализация Web App
-        Telegram.WebApp.ready();
-        let userData = {};
+        let currentUser = null;
+        let routeInterval = null;
 
-        // Загрузка данных пользователя
-        async function loadUserData() {
+        // Инициализация
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+        
+        // Загрузка данных
+        async function loadData() {
             try {
-                const response = await fetch('ВАШ_БЭКЭНД/get-user-data', {
-                    method: 'POST',
+                const response = await fetch('/api/user', {
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-Telegram-Data': Telegram.WebApp.initData
+                        'X-Telegram-Init-Data': Telegram.WebApp.initData
                     }
                 });
-                userData = await response.json();
+                
+                currentUser = await response.json();
                 updateUI();
             } catch (error) {
                 console.error('Ошибка:', error);
@@ -94,23 +177,59 @@
 
         // Обновление интерфейса
         function updateUI() {
-            document.getElementById('balance').textContent = userData.balance;
-            document.getElementById('level').textContent = userData.level;
+            document.getElementById('balance').textContent = currentUser.balance;
+            document.getElementById('level').textContent = currentUser.level;
+            
+            // Гараж
+            const garageList = document.getElementById('garageList');
+            garageList.innerHTML = Object.entries(currentUser.trucks).map(([id, truck]) => `
+                <div class="truck-card">
+                    <h3>${truck.model}</h3>
+                    <p>Топливо: ${truck.fuel}%</p>
+                    ${id === currentUser.current_truck ? 
+                        '<button disabled>Выбран</button>' : 
+                        <button onclick="selectTruck('${id}')">Выбрать</button>}
+                </div>
+            `).join('');
         }
 
         // Начать рейс
-        async function startRoute() {
-            const truck = document.getElementById('truck');
-            truck.style.left = "-100px";
+        async function startRoute(route) {
+            const response = await fetch('/api/start-route', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-Init-Data': Telegram.WebApp.initData
+                },
+                body: JSON.stringify({
+                    userId: currentUser.id,
+                    route: route
+                })
+            });
             
-            // Анимация движения
-            let position = -100;
-            const animation = setInterval(() => {
-                position += 5;
-                truck.style.left = position + "px";
+            if(response.ok) {
+                animateRoute(route);
+            }
+        }
+
+        // Анимация движения
+        function animateRoute(route) {
+            const distance = route.includes('Москва') ? 800 : 1200;
+            let progress = 0;
+            
+            const truck = document.getElementById('truck');
+            truck.style.left = '-100px';
+            
+            routeInterval = setInterval(() => {
+                progress += 1;
+                truck.style.left = ${(progress / distance) * 100}%;
                 
-                if(position > 600) {
-                    clearInterval(animation);
+                document.getElementById('routeProgress').innerHTML = `
+                    <p>Прогресс: ${progress}км / ${distance}км</p>
+                `;
+                
+                if(progress >= distance) {
+                    clearInterval(routeInterval);
                     completeRoute();
                 }
             }, 50);
@@ -118,27 +237,44 @@
 
         // Завершение рейса
         async function completeRoute() {
-            try {
-                const response = await fetch('ВАШ_БЭКЭНД/complete-route', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Telegram-Data': Telegram.WebApp.initData
-                    }
-                });
-                
-                if(response.ok) {
-                    userData = await response.json();
-                    updateUI();
-                    Telegram.WebApp.showAlert("Рейс завершен! +500₽");
-                }
-            } catch (error) {
-                console.error('Ошибка:', error);
-            }
+            currentUser.balance += 500;
+            currentUser.routes_completed += 1;
+            updateUI();
+            
+            Telegram.WebApp.showAlert('Рейс успешно завершен! +500₽');
+        }
+
+        // Переключение экранов
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
+            document.getElementById(${screenId}Screen).style.display = 'block';
+        }
+
+        // Загрузка рейтинга
+        async function loadRating() {
+            const response = await fetch('/api/rating');
+            const rating = await response.json();
+            
+            const table = document.getElementById('ratingTable');
+            table.innerHTML = `
+                <tr>
+                    <th>Игрок</th>
+                    <th>Баланс</th>
+                    <th>Рейсы</th>
+                </tr>
+                ${rating.map(user => `
+                    <tr>
+                        <td>${user.username || user.first_name}</td>
+                        <td>${user.balance}₽</td>
+                        <td>${user.routes_completed}</td>
+                    </tr>
+                `).join('')}
+            `;
         }
 
         // Инициализация
-        loadUserData();
+        loadData();
+        loadRating();
     </script>
 </body>
 </html>
